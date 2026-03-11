@@ -16,14 +16,6 @@
       "category": "docs",
       "default": true
     },
-    "filesystem": {
-      "name": "Filesystem",
-      "description": "Read/write files in /workspace",
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-filesystem", "/workspace"],
-      "category": "system",
-      "default": false
-    },
     "github": {
       "name": "GitHub",
       "description": "GitHub repos, issues, PRs, actions",

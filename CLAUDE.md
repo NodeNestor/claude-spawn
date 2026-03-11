@@ -30,7 +30,6 @@ These are cloned from `github.com/NodeNestor/<name>` and registered as Claude Co
 Third-party MCP servers (npm packages). Pass in the `mcp_servers` array:
 - **playwright** — browser automation and testing (default: ON)
 - **context7** — live docs for any library (default: ON)
-- **filesystem** — file read/write in /workspace
 - **github** — GitHub API (needs GITHUB_TOKEN in env)
 - **fetch** — HTTP requests
 - **memory** — persistent key-value store

@@ -73,7 +73,6 @@ npm packages registered via `claude mcp add-json`. Pass in `mcp_servers` array:
 |--------|-------------|---------|
 | `playwright` | Browser automation and testing | yes |
 | `context7` | Live docs for any library | yes |
-| `filesystem` | File read/write in /workspace | no |
 | `github` | GitHub API (needs GITHUB_TOKEN) | no |
 | `fetch` | HTTP requests | no |
 | `memory` | Persistent key-value store | no |
