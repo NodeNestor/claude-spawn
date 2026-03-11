@@ -33,6 +33,27 @@ if [ -f /credentials/git/.gitconfig ]; then
     chown agent:agent /home/agent/.gitconfig
 fi
 
+# GitHub CLI config
+if [ -d /credentials/gh ]; then
+    echo "[credentials] Copying GitHub CLI config..."
+    mkdir -p /home/agent/.config/gh
+    cp -r /credentials/gh/. /home/agent/.config/gh/
+    chown -R agent:agent /home/agent/.config/gh
+
+    # If GH_TOKEN is set (extracted from host keyring), write it into hosts.yml
+    # so gh CLI works inside the container without keyring
+    if [ -n "${GH_TOKEN:-}" ]; then
+        echo "[credentials] Injecting GitHub token into gh config..."
+        cat > /home/agent/.config/gh/hosts.yml <<GHEOF
+github.com:
+    oauth_token: ${GH_TOKEN}
+    user: ""
+    git_protocol: https
+GHEOF
+        chown agent:agent /home/agent/.config/gh/hosts.yml
+    fi
+fi
+
 # --- Custom API key ---
 # If ANTHROPIC_API_KEY is set via env, write it into settings so Claude Code picks it up.
 # This overrides any credentials copied from the host.

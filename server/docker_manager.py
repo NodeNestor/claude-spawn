@@ -35,12 +35,27 @@ def _container_name(name: str) -> str:
 
 
 class DockerManager:
+    def _home(self) -> str:
+        return os.environ.get("USERPROFILE") or os.environ.get("HOME") or ""
+
     def _creds_dir(self) -> str:
         """Find the Claude credentials directory on the host."""
-        home = os.environ.get("USERPROFILE") or os.environ.get("HOME") or ""
-        claude_dir = os.path.join(home, ".claude")
+        claude_dir = os.path.join(self._home(), ".claude")
         if os.path.isdir(claude_dir):
             return claude_dir
+        return ""
+
+    def _get_gh_token(self) -> str:
+        """Extract GitHub token from gh CLI (works even with keyring auth)."""
+        try:
+            r = subprocess.run(
+                ["gh", "auth", "token"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip()
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
         return ""
 
     def _build_image(self, desktop: bool) -> tuple[bool, str]:
@@ -104,19 +119,32 @@ class DockerManager:
         if creds:
             cmd += ["-v", f"{creds}:/credentials/claude:ro"]
 
+        home = self._home()
+
         # SSH keys
-        ssh_dir = os.path.join(
-            os.environ.get("USERPROFILE") or os.environ.get("HOME") or "", ".ssh"
-        )
+        ssh_dir = os.path.join(home, ".ssh")
         if os.path.isdir(ssh_dir):
             cmd += ["-v", f"{ssh_dir}:/credentials/ssh:ro"]
 
         # Git config
-        gitconfig = os.path.join(
-            os.environ.get("USERPROFILE") or os.environ.get("HOME") or "", ".gitconfig"
-        )
+        gitconfig = os.path.join(home, ".gitconfig")
         if os.path.isfile(gitconfig):
             cmd += ["-v", f"{gitconfig}:/credentials/git/.gitconfig:ro"]
+
+        # GitHub CLI config
+        # Windows: AppData/Roaming/GitHub CLI, Linux/Mac: ~/.config/gh
+        gh_dir = os.path.join(home, "AppData", "Roaming", "GitHub CLI")
+        if not os.path.isdir(gh_dir):
+            gh_dir = os.path.join(home, ".config", "gh")
+        if os.path.isdir(gh_dir):
+            cmd += ["-v", f"{gh_dir}:/credentials/gh:ro"]
+
+        # Extract gh token for GITHUB_TOKEN env (needed for gh CLI inside container,
+        # since keyring won't be available)
+        gh_token = self._get_gh_token()
+        if gh_token:
+            cmd += ["-e", f"GITHUB_TOKEN={gh_token}"]
+            cmd += ["-e", f"GH_TOKEN={gh_token}"]
 
         # Environment
         cmd += ["-e", f"AGENT_NAME={name}"]

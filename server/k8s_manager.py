@@ -129,8 +129,21 @@ class K8sManager:
     def __init__(self, namespace: str = "default"):
         self.namespace = namespace
 
+    def _get_gh_token(self) -> str:
+        """Extract GitHub token from gh CLI."""
+        try:
+            r = subprocess.run(
+                ["gh", "auth", "token"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip()
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        return ""
+
     def _ensure_creds_secret(self, name: str) -> None:
-        """Create a K8s secret with Claude credentials from the host."""
+        """Create a K8s secret with Claude + GitHub credentials from the host."""
         secret_name = f"claude-spawn-creds-{name}"
         home = os.environ.get("USERPROFILE") or os.environ.get("HOME") or ""
         creds_file = os.path.join(home, ".claude", ".credentials.json")
@@ -179,6 +192,14 @@ class K8sManager:
         # Create credentials secret
         if not api_key:
             self._ensure_creds_secret(name)
+
+        # Inject GitHub token into env if available
+        if env is None:
+            env = {}
+        gh_token = self._get_gh_token()
+        if gh_token and "GITHUB_TOKEN" not in env:
+            env["GITHUB_TOKEN"] = gh_token
+            env["GH_TOKEN"] = gh_token
 
         # Build and apply pod spec
         spec = _build_pod_spec(
