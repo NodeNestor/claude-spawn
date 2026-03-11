@@ -1,6 +1,6 @@
 # claude-spawn
 
-Spawn containerized Claude Code agents with optional desktop/GPU and SSH access. The orchestrator plugin.
+Spawn containerized Claude Code agents — locally, on Kubernetes, or on remote servers. The orchestrator plugin.
 
 ## Install
 
@@ -21,41 +21,38 @@ Just ask Claude naturally:
 
 > "Spawn an agent to fix the failing tests in this repo"
 
-> "Create an agent with a browser to run e2e tests"
+> "Create an agent on my k8s cluster with GPU to train the model"
 
-> "Spin up an agent with rolling-context and autoresearch to work on this long task"
+> "Spin up an agent on the staging server to run the deploy"
 
 > "How are my agents doing?"
 
-Claude handles the MCP tool calls behind the scenes. You never need to call tools directly.
+Claude handles the tool calls behind the scenes.
+
+## Targets
+
+| Target | Where it runs | What you need |
+|--------|--------------|---------------|
+| `local` | Local Docker (default) | Docker |
+| `k8s` | Kubernetes cluster | kubectl |
+| `remote` | Remote Docker host | SSH access |
+
+```
+"Spawn an agent locally to fix tests"
+"Spawn an agent on k8s node gpu-node-1 with GPU"
+"Spawn an agent on ssh://deploy@prod-server"
+```
 
 ## What it does
 
-- **Spawn agents** — each agent runs Claude Code in an isolated Docker container
-- **Optional desktop** — Xvfb + Chromium + noVNC for browser-based tasks
-- **Optional GPU** — NVIDIA runtime passthrough for ML workloads
-- **Credential forwarding** — mounts `~/.claude/` and `~/.ssh/` read-only
-- **Plugin support** — auto-install rolling-context, knowledge-graph, workflows, autoresearch
-- **SSH access** — connect to any agent via SSH
-- **tmux sessions** — agents run in tmux for easy attach/detach
-
-## Quick start
-
-Just tell Claude what you want:
-
-```
-"Spawn an agent called fix-tests to clone github.com/user/repo and fix the failing tests"
-"Spin up an agent with a desktop browser for e2e testing"
-"Create an agent with rolling-context and autoresearch plugins"
-"Check the logs on my fix-tests agent"
-"Stop all agents"
-```
-
-Under the hood, Claude calls MCP tools like `spawn_agent`, `agent_logs`, `stop_agent`, etc.
+- **Multi-target** — local Docker, Kubernetes pods, or remote Docker hosts
+- **Optional desktop** — Xvfb + Chromium + noVNC for browser tasks
+- **Optional GPU** — NVIDIA runtime / K8s GPU resources
+- **Credential forwarding** — auto-inherits host auth (local: mount, k8s: secret, remote: mount)
+- **Plugin support** — auto-install any NodeNestor plugin stack
+- **SSH + tmux** — connect to any agent directly
 
 ## Plugins (NodeNestor stack)
-
-Installed from GitHub repos. Pass in `plugins` array:
 
 | Plugin | Description |
 |--------|-------------|
@@ -67,8 +64,6 @@ Installed from GitHub repos. Pass in `plugins` array:
 
 ## MCP servers (third-party)
 
-npm packages registered via `claude mcp add-json`. Pass in `mcp_servers` array:
-
 | Server | Description | Default |
 |--------|-------------|---------|
 | `playwright` | Browser automation and testing | yes |
@@ -78,42 +73,32 @@ npm packages registered via `claude mcp add-json`. Pass in `mcp_servers` array:
 | `postgres` | PostgreSQL (needs POSTGRES_CONNECTION_STRING) | no |
 | `sqlite` | SQLite databases | no |
 
-Use `"all"` for everything, `"none"` to disable all.
-
-## MCP tools
+## Tools
 
 | Tool | Description |
 |------|-------------|
-| `spawn_agent` | Create a new agent container |
-| `list_available` | See all plugins and MCP servers |
-| `list_agents` | List all agents |
+| `spawn_agent` | Create a new agent (any target) |
+| `list_available` | See all plugins, MCP servers, and targets |
+| `list_agents` | List agents across all targets |
 | `agent_status` | Get agent status and ports |
 | `agent_logs` | Read agent output |
 | `agent_exec` | Run a command in an agent |
 | `stop_agent` | Stop and remove an agent |
 
-## Images
-
-| Image | Contents |
-|-------|----------|
-| `claude-spawn:minimal` | Ubuntu 24.04, Python 3, Node.js 22, Claude Code, SSH, tmux |
-| `claude-spawn:desktop` | Minimal + Xvfb, Chromium, noVNC (port 6080) |
-
-Images are built automatically on first spawn.
-
 ## Auth
 
-By default, agents inherit credentials from the host's `~/.claude/` (mounted read-only). To use custom auth:
+By default, agents inherit credentials from the host. To use custom auth:
 
 - **`api_key`** — custom Anthropic API key
-- **`api_url`** — custom API base URL (e.g. a proxy like CodeGate)
+- **`api_url`** — custom API base URL (e.g. a proxy)
 
-When `rolling-context` is in the plugins list, the entrypoint auto-configures the proxy chain:
+When `rolling-context` is in plugins, the proxy chain auto-configures:
 ```
 Claude Code -> rolling-context (:5588) -> api_url (or api.anthropic.com)
 ```
 
 ## Requirements
 
-- Docker
+- Docker (for local/remote targets)
+- kubectl (for k8s target)
 - Python 3.10+ (for the MCP server)

@@ -1,83 +1,78 @@
 # claude-spawn
 
-You have the claude-spawn plugin installed. Use it to spawn and manage containerized Claude Code agents.
+You have the claude-spawn plugin installed. Use it to spawn and manage containerized Claude Code agents — locally, on Kubernetes, or on remote Docker hosts.
 
 ## Tools
 
 | Tool | Use |
 |------|-----|
-| `spawn_agent` | Create a new agent container. Set `desktop: true` for browser/noVNC, `gpu: true` for NVIDIA GPU. |
-| `list_available` | See all available plugins and MCP servers before spawning |
-| `list_agents` | See all running agents |
+| `spawn_agent` | Create a new agent. Set `target` to choose where it runs. |
+| `list_available` | See all plugins, MCP servers, and targets |
+| `list_agents` | See all running agents across all targets |
 | `agent_status` | Check a specific agent's state and ports |
 | `agent_logs` | Read an agent's output |
-| `agent_exec` | Run a command inside an agent container |
+| `agent_exec` | Run a command inside an agent |
 | `stop_agent` | Stop and remove an agent |
+
+## Targets
+
+| Target | Description | Requirements |
+|--------|-------------|-------------|
+| `local` | Local Docker (default) | Docker |
+| `k8s` | Kubernetes cluster | kubectl with cluster access |
+| `remote` | Remote Docker host | SSH access (pass `host: "ssh://user@server"`) |
 
 ## Plugins (NodeNestor stack)
 
-Our plugins — installed from GitHub repos. Pass in the `plugins` array:
+Pass in the `plugins` array:
 - **rolling-context** — context compression proxy for long sessions
 - **knowledge-graph** — persistent cross-session memory
 - **workflows** — agent controller with YAML workflows, cron, GitHub polling
 - **autoresearch** — auto-research any codebase on first session
 - **worktrees** — parallel experimentation via git worktrees
 
-These are cloned from `github.com/NodeNestor/<name>` and registered as Claude Code plugins.
-
 ## MCP Servers (third-party)
 
-Third-party MCP servers (npm packages). Pass in the `mcp_servers` array:
-- **playwright** — browser automation and testing (default: ON)
-- **context7** — live docs for any library (default: ON)
-- **github** — GitHub API (needs GITHUB_TOKEN in env)
+Pass in the `mcp_servers` array (defaults: playwright + context7):
+- **playwright** — browser automation and testing
+- **context7** — live docs for any library
+- **github** — GitHub API (needs GITHUB_TOKEN)
 - **fetch** — HTTP requests
-- **postgres** — PostgreSQL (needs POSTGRES_CONNECTION_STRING in env)
+- **postgres** — PostgreSQL (needs POSTGRES_CONNECTION_STRING)
 - **sqlite** — SQLite databases
-
-Use `"all"` for everything, `"none"` to disable all, or pick specific ones.
-
-Call `list_available` to see the full catalog before spawning.
-
-## Workflow
-
-1. **Spawn** an agent with a name, optional prompt, optional repo URL
-2. **Monitor** with `agent_logs` and `agent_status`
-3. **Interact** with `agent_exec` to run commands inside the container
-4. **Stop** when done
 
 ## Examples
 
-Spawn a basic agent:
+Local agent:
 ```
-spawn_agent(name: "fix-tests", prompt: "Run the tests and fix any failures", repo: "https://github.com/user/repo")
-```
-
-Spawn with desktop for browser testing:
-```
-spawn_agent(name: "e2e-tests", prompt: "Run e2e browser tests", desktop: true)
+spawn_agent(name: "fix-tests", prompt: "Fix failing tests", repo: "https://github.com/user/repo")
 ```
 
-Spawn with plugins:
+On Kubernetes with GPU:
 ```
-spawn_agent(name: "research", prompt: "Research this codebase", plugins: ["rolling-context", "autoresearch"])
-```
-
-Spawn with custom API endpoint (e.g. a proxy):
-```
-spawn_agent(name: "worker", api_url: "https://my-proxy.example.com/v1", api_key: "sk-...")
+spawn_agent(name: "trainer", target: "k8s", gpu: true, node: "gpu-node-1", prompt: "Train the model")
 ```
 
-Spawn with rolling-context through a custom proxy:
+On a remote server:
 ```
-spawn_agent(name: "long-task", plugins: ["rolling-context"], api_url: "https://my-proxy.example.com")
+spawn_agent(name: "worker", target: "remote", host: "ssh://deploy@prod-server", prompt: "Deploy and test")
+```
+
+With desktop on K8s:
+```
+spawn_agent(name: "e2e", target: "k8s", desktop: true, prompt: "Run browser e2e tests")
+```
+
+Full stack:
+```
+spawn_agent(name: "research", plugins: ["rolling-context", "knowledge-graph", "autoresearch"], mcp_servers: ["playwright", "context7"])
 ```
 
 ## Notes
 
 - Agents run with `--dangerously-skip-permissions` for autonomous operation
-- **Credentials**: by default, mounts the host's `~/.claude/` and `~/.ssh/` read-only. The agent auto-inherits the host's auth.
-- **Custom auth**: pass `api_key` and/or `api_url` to override. These are written into the container's settings.json.
-- **rolling-context ordering**: when `rolling-context` is in the plugins list, the entrypoint configures the proxy chain automatically — Claude Code -> rolling-context (:5588) -> upstream API. If you also pass a custom `api_url`, rolling-context chains through it.
-- Each agent gets its own isolated `/workspace` volume
-- Desktop agents expose noVNC on a dynamic port (check `agent_status` for the assigned port)
+- **Local**: credentials mounted read-only from host `~/.claude/` and `~/.ssh/`
+- **K8s**: credentials stored as Kubernetes Secrets, auto-created from host
+- **Remote**: same Docker commands, routed via `DOCKER_HOST=ssh://...`
+- **rolling-context**: when in plugins, auto-configures proxy chain (Claude Code -> :5588 -> upstream)
+- `list_agents` with no target shows agents across all targets

@@ -7,19 +7,38 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from mcp_stdio import MCPServer
 from docker_manager import DockerManager
+from k8s_manager import K8sManager
+from remote_manager import RemoteManager
 
 server = MCPServer("claude-spawn", "1.0.0")
-dm = DockerManager()
+
+# Manager cache — reuse managers across calls
+_managers = {}
+
+
+def _get_manager(target: str = "local", host: str = "", namespace: str = "default"):
+    """Get or create the right manager for the target."""
+    key = f"{target}:{host}:{namespace}"
+    if key not in _managers:
+        if target == "k8s":
+            _managers[key] = K8sManager(namespace=namespace)
+        elif target == "remote":
+            if not host:
+                raise ValueError("'host' is required for remote target (e.g. 'ssh://user@server')")
+            _managers[key] = RemoteManager(host=host)
+        else:
+            _managers[key] = DockerManager()
+    return _managers[key]
 
 
 @server.tool(
     "spawn_agent",
-    "Spawn a new containerized Claude Code agent",
+    "Spawn a new containerized Claude Code agent (locally, on Kubernetes, or on a remote Docker host)",
     {
         "properties": {
             "name": {
                 "type": "string",
-                "description": "Agent name (used as container name prefix)",
+                "description": "Agent name (used as container/pod name)",
             },
             "prompt": {
                 "type": "string",
@@ -27,7 +46,24 @@ dm = DockerManager()
             },
             "repo": {
                 "type": "string",
-                "description": "Git repo URL to clone into the agent workspace (optional)",
+                "description": "Git repo URL to clone into the agent workspace",
+            },
+            "target": {
+                "type": "string",
+                "enum": ["local", "k8s", "remote"],
+                "description": "Where to spawn: 'local' (default Docker), 'k8s' (Kubernetes cluster), 'remote' (remote Docker host)",
+            },
+            "host": {
+                "type": "string",
+                "description": "Remote Docker host URI, e.g. 'ssh://user@server'. Only used with target='remote'.",
+            },
+            "namespace": {
+                "type": "string",
+                "description": "Kubernetes namespace (default: 'default'). Only used with target='k8s'.",
+            },
+            "node": {
+                "type": "string",
+                "description": "Kubernetes node hostname to schedule on. Only used with target='k8s'.",
             },
             "desktop": {
                 "type": "boolean",
@@ -35,17 +71,17 @@ dm = DockerManager()
             },
             "gpu": {
                 "type": "boolean",
-                "description": "Enable GPU passthrough via NVIDIA runtime (default: false)",
+                "description": "Enable GPU passthrough (default: false)",
             },
             "plugins": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "NodeNestor plugins to install: rolling-context, knowledge-graph, workflows, autoresearch, worktrees (default: none)",
+                "description": "NodeNestor plugins: rolling-context, knowledge-graph, workflows, autoresearch, worktrees",
             },
             "mcp_servers": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "MCP servers to enable: playwright, context7, github, fetch, postgres, sqlite. Defaults: playwright + context7. Pass 'none' to disable all, 'all' for everything.",
+                "description": "MCP servers: playwright, context7, github, fetch, postgres, sqlite. Defaults: playwright + context7.",
             },
             "api_key": {
                 "type": "string",
@@ -53,11 +89,11 @@ dm = DockerManager()
             },
             "api_url": {
                 "type": "string",
-                "description": "Custom API base URL, e.g. a proxy endpoint (default: https://api.anthropic.com)",
+                "description": "Custom API base URL (default: https://api.anthropic.com)",
             },
             "env": {
                 "type": "object",
-                "description": "Extra environment variables to pass to the container",
+                "description": "Extra environment variables",
             },
         },
         "required": ["name"],
@@ -67,6 +103,10 @@ def spawn_agent(
     name: str,
     prompt: str = "",
     repo: str = "",
+    target: str = "local",
+    host: str = "",
+    namespace: str = "default",
+    node: str = "",
     desktop: bool = False,
     gpu: bool = False,
     plugins: list = None,
@@ -75,18 +115,22 @@ def spawn_agent(
     api_url: str = "",
     env: dict = None,
 ):
-    return dm.spawn(
-        name=name,
-        prompt=prompt,
-        repo=repo,
-        desktop=desktop,
-        gpu=gpu,
-        plugins=plugins or [],
-        mcp_servers=mcp_servers,
-        api_key=api_key,
-        api_url=api_url,
-        env=env or {},
+    try:
+        mgr = _get_manager(target, host, namespace)
+    except ValueError as e:
+        return str(e)
+
+    kwargs = dict(
+        name=name, prompt=prompt, repo=repo, desktop=desktop,
+        gpu=gpu, plugins=plugins or [], mcp_servers=mcp_servers,
+        api_key=api_key, api_url=api_url, env=env or {},
     )
+    # K8s-specific params
+    if target == "k8s":
+        kwargs["namespace"] = namespace
+        kwargs["node"] = node
+
+    return mgr.spawn(**kwargs)
 
 
 @server.tool(
@@ -112,7 +156,7 @@ def list_available():
             "autoresearch": "Auto-research any codebase on first session",
             "worktrees": "Parallel experimentation via git worktrees",
         },
-        "mcp_servers": {
+        "mcp_servers (third-party npm)": {
             name: {
                 "description": s.get("description", ""),
                 "category": s.get("category", ""),
@@ -121,7 +165,13 @@ def list_available():
             }
             for name, s in mcp.items()
         },
+        "targets": {
+            "local": "Local Docker (default)",
+            "k8s": "Kubernetes cluster (needs kubectl)",
+            "remote": "Remote Docker host (needs host param, e.g. ssh://user@server)",
+        },
         "defaults": {
+            "target": "local",
             "mcp_servers": ["playwright", "context7"],
             "plugins": [],
         },
@@ -132,10 +182,52 @@ def list_available():
 @server.tool(
     "list_agents",
     "List all running claude-spawn agents",
-    {"properties": {}, "required": []},
+    {
+        "properties": {
+            "target": {
+                "type": "string",
+                "enum": ["local", "k8s", "remote", "all"],
+                "description": "Which target to list from (default: 'all')",
+            },
+            "host": {"type": "string", "description": "Remote Docker host (for target='remote')"},
+            "namespace": {"type": "string", "description": "K8s namespace (for target='k8s')"},
+        },
+        "required": [],
+    },
 )
-def list_agents():
-    return dm.list_agents()
+def list_agents(target: str = "all", host: str = "", namespace: str = "default"):
+    if target == "all":
+        results = []
+        # Local Docker
+        local_mgr = _get_manager("local")
+        local_result = local_mgr.list_agents()
+        if not local_result.startswith("No agents") and not local_result.startswith("Failed"):
+            try:
+                agents = json.loads(local_result)
+                for a in agents:
+                    a["target"] = "local"
+                results.extend(agents)
+            except json.JSONDecodeError:
+                pass
+
+        # K8s (only if kubectl is available)
+        try:
+            k8s_mgr = _get_manager("k8s", namespace=namespace)
+            k8s_result = k8s_mgr.list_agents()
+            if not k8s_result.startswith("No agents") and not k8s_result.startswith("Failed"):
+                results.extend(json.loads(k8s_result))
+        except Exception:
+            pass
+
+        if not results:
+            return "No agents running."
+        return json.dumps(results, indent=2)
+
+    try:
+        mgr = _get_manager(target, host, namespace)
+    except ValueError as e:
+        return str(e)
+    return mgr.list_agents()
 
 
 @server.tool(
@@ -144,59 +236,84 @@ def list_agents():
     {
         "properties": {
             "name": {"type": "string", "description": "Agent name"},
+            "target": {"type": "string", "enum": ["local", "k8s", "remote"], "description": "Target (default: local)"},
+            "host": {"type": "string", "description": "Remote Docker host"},
+            "namespace": {"type": "string", "description": "K8s namespace"},
         },
         "required": ["name"],
     },
 )
-def agent_status(name: str):
-    return dm.status(name)
+def agent_status(name: str, target: str = "local", host: str = "", namespace: str = "default"):
+    try:
+        mgr = _get_manager(target, host, namespace)
+    except ValueError as e:
+        return str(e)
+    return mgr.status(name)
 
 
 @server.tool(
     "agent_logs",
-    "Get recent logs from an agent container",
+    "Get recent logs from an agent",
     {
         "properties": {
             "name": {"type": "string", "description": "Agent name"},
-            "lines": {
-                "type": "integer",
-                "description": "Number of lines to fetch (default: 50)",
-            },
+            "lines": {"type": "integer", "description": "Number of lines (default: 50)"},
+            "target": {"type": "string", "enum": ["local", "k8s", "remote"], "description": "Target (default: local)"},
+            "host": {"type": "string", "description": "Remote Docker host"},
+            "namespace": {"type": "string", "description": "K8s namespace"},
         },
         "required": ["name"],
     },
 )
-def agent_logs(name: str, lines: int = 50):
-    return dm.logs(name, lines)
+def agent_logs(name: str, lines: int = 50, target: str = "local", host: str = "", namespace: str = "default"):
+    try:
+        mgr = _get_manager(target, host, namespace)
+    except ValueError as e:
+        return str(e)
+    return mgr.logs(name, lines)
 
 
 @server.tool(
     "agent_exec",
-    "Execute a command inside a running agent container",
+    "Execute a command inside a running agent",
     {
         "properties": {
             "name": {"type": "string", "description": "Agent name"},
             "command": {"type": "string", "description": "Command to execute"},
+            "target": {"type": "string", "enum": ["local", "k8s", "remote"], "description": "Target (default: local)"},
+            "host": {"type": "string", "description": "Remote Docker host"},
+            "namespace": {"type": "string", "description": "K8s namespace"},
         },
         "required": ["name", "command"],
     },
 )
-def agent_exec(name: str, command: str):
-    return dm.exec(name, command)
+def agent_exec(name: str, command: str, target: str = "local", host: str = "", namespace: str = "default"):
+    try:
+        mgr = _get_manager(target, host, namespace)
+    except ValueError as e:
+        return str(e)
+    return mgr.exec(name, command)
 
 
 @server.tool(
     "stop_agent",
-    "Stop and remove an agent container",
+    "Stop and remove an agent",
     {
         "properties": {
             "name": {"type": "string", "description": "Agent name"},
+            "target": {"type": "string", "enum": ["local", "k8s", "remote"], "description": "Target (default: local)"},
+            "host": {"type": "string", "description": "Remote Docker host"},
+            "namespace": {"type": "string", "description": "K8s namespace"},
         },
         "required": ["name"],
     },
 )
-def stop_agent(name: str):
-    return dm.stop(name)
+def stop_agent(name: str, target: str = "local", host: str = "", namespace: str = "default"):
+    try:
+        mgr = _get_manager(target, host, namespace)
+    except ValueError as e:
+        return str(e)
+    return mgr.stop(name)
 
 
 if __name__ == "__main__":
