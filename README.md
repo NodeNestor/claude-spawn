@@ -75,7 +75,6 @@ npm packages registered via `claude mcp add-json`. Pass in `mcp_servers` array:
 | `context7` | Live docs for any library | yes |
 | `github` | GitHub API (needs GITHUB_TOKEN) | no |
 | `fetch` | HTTP requests | no |
-| `memory` | Persistent key-value store | no |
 | `postgres` | PostgreSQL (needs POSTGRES_CONNECTION_STRING) | no |
 | `sqlite` | SQLite databases | no |
 

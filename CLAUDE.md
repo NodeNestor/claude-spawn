@@ -32,7 +32,6 @@ Third-party MCP servers (npm packages). Pass in the `mcp_servers` array:
 - **context7** — live docs for any library (default: ON)
 - **github** — GitHub API (needs GITHUB_TOKEN in env)
 - **fetch** — HTTP requests
-- **memory** — persistent key-value store
 - **postgres** — PostgreSQL (needs POSTGRES_CONNECTION_STRING in env)
 - **sqlite** — SQLite databases
 

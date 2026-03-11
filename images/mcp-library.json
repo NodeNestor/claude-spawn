@@ -33,14 +33,6 @@
       "category": "network",
       "default": false
     },
-    "memory": {
-      "name": "Memory",
-      "description": "Persistent key-value memory store",
-      "command": "npx",
-      "args": ["@modelcontextprotocol/server-memory"],
-      "category": "memory",
-      "default": false
-    },
     "postgres": {
       "name": "PostgreSQL",
       "description": "Query and manage PostgreSQL databases",

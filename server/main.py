@@ -45,7 +45,7 @@ dm = DockerManager()
             "mcp_servers": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "MCP servers to enable: playwright, context7, github, fetch, memory, postgres, sqlite. Defaults: playwright + context7. Pass 'none' to disable all, 'all' for everything.",
+                "description": "MCP servers to enable: playwright, context7, github, fetch, postgres, sqlite. Defaults: playwright + context7. Pass 'none' to disable all, 'all' for everything.",
             },
             "api_key": {
                 "type": "string",
