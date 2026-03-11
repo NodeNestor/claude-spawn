@@ -4,9 +4,30 @@ Spawn containerized Claude Code agents with optional desktop/GPU and SSH access.
 
 ## Install
 
+From the NodeNestor marketplace:
 ```bash
+/plugin marketplace add https://github.com/NodeNestor/nestor-plugins
 /plugin install claude-spawn
 ```
+
+Or manually:
+```bash
+git clone https://github.com/NodeNestor/claude-spawn.git ~/.claude/plugins/claude-spawn
+```
+
+## Usage
+
+Just ask Claude naturally:
+
+> "Spawn an agent to fix the failing tests in this repo"
+
+> "Create an agent with a browser to run e2e tests"
+
+> "Spin up an agent with rolling-context and autoresearch to work on this long task"
+
+> "How are my agents doing?"
+
+Claude handles the MCP tool calls behind the scenes. You never need to call tools directly.
 
 ## What it does
 
@@ -20,31 +41,17 @@ Spawn containerized Claude Code agents with optional desktop/GPU and SSH access.
 
 ## Quick start
 
-Spawn an agent to fix tests:
+Just tell Claude what you want:
+
 ```
-spawn_agent(name: "fix-tests", prompt: "Run tests and fix failures", repo: "https://github.com/user/repo")
+"Spawn an agent called fix-tests to clone github.com/user/repo and fix the failing tests"
+"Spin up an agent with a desktop browser for e2e testing"
+"Create an agent with rolling-context and autoresearch plugins"
+"Check the logs on my fix-tests agent"
+"Stop all agents"
 ```
 
-Spawn with browser for e2e testing:
-```
-spawn_agent(name: "e2e", desktop: true, prompt: "Run browser e2e tests")
-```
-
-With custom API endpoint:
-```
-spawn_agent(name: "worker", api_url: "https://my-proxy.example.com", api_key: "sk-...")
-```
-
-With rolling-context through a proxy:
-```
-spawn_agent(name: "long-task", plugins: ["rolling-context"], api_url: "https://my-proxy.example.com")
-```
-
-Check on it:
-```
-agent_logs(name: "fix-tests")
-agent_status(name: "e2e")
-```
+Under the hood, Claude calls MCP tools like `spawn_agent`, `agent_logs`, `stop_agent`, etc.
 
 ## Plugins (NodeNestor stack)
 
