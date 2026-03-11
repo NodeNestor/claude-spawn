@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "spawn": {
+      "command": "bash",
+      "args": ["run_server.sh"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  }
+}

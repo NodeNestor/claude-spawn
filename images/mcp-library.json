@@ -1,0 +1,70 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "name": "Playwright",
+      "description": "Browser automation and web testing",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--no-sandbox"],
+      "category": "testing",
+      "default": true
+    },
+    "context7": {
+      "name": "Context7",
+      "description": "Up-to-date docs and code examples for any library",
+      "command": "npx",
+      "args": ["@upstash/context7-mcp"],
+      "category": "docs",
+      "default": true
+    },
+    "filesystem": {
+      "name": "Filesystem",
+      "description": "Read/write files in /workspace",
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-filesystem", "/workspace"],
+      "category": "system",
+      "default": false
+    },
+    "github": {
+      "name": "GitHub",
+      "description": "GitHub repos, issues, PRs, actions",
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-github"],
+      "category": "development",
+      "default": false,
+      "requiredEnv": ["GITHUB_TOKEN"]
+    },
+    "fetch": {
+      "name": "Fetch",
+      "description": "HTTP requests and web content fetching",
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-fetch"],
+      "category": "network",
+      "default": false
+    },
+    "memory": {
+      "name": "Memory",
+      "description": "Persistent key-value memory store",
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-memory"],
+      "category": "memory",
+      "default": false
+    },
+    "postgres": {
+      "name": "PostgreSQL",
+      "description": "Query and manage PostgreSQL databases",
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-postgres"],
+      "category": "database",
+      "default": false,
+      "requiredEnv": ["POSTGRES_CONNECTION_STRING"]
+    },
+    "sqlite": {
+      "name": "SQLite",
+      "description": "Query and manage SQLite databases",
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-sqlite"],
+      "category": "database",
+      "default": false
+    }
+  }
+}

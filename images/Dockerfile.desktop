@@ -1,0 +1,58 @@
+# claude-spawn:desktop — Claude Code agent with browser and noVNC
+# Extends minimal with: Xvfb, Chromium, noVNC, websockify
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+
+# Core packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash curl wget git jq tmux openssh-server sudo \
+    python3 python3-pip python3-venv \
+    build-essential ca-certificates locales \
+    && locale-gen en_US.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Desktop packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xvfb x11-utils xdotool \
+    chromium-browser \
+    novnc websockify \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 22
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Agent user
+RUN useradd -m -s /bin/bash -u 1000 agent \
+    && echo "agent ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Claude Code
+RUN su - agent -c "npm install -g @anthropic-ai/claude-code"
+
+# SSH
+RUN mkdir -p /var/run/sshd && ssh-keygen -A
+COPY sshd_config /etc/ssh/sshd_config
+
+# Directories
+RUN mkdir -p /workspace /credentials \
+    /home/agent/.claude \
+    && chown -R agent:agent /workspace /home/agent
+
+# MCP server library + entrypoint
+COPY mcp-library.json /opt/mcp-library.json
+COPY entrypoint.sh /opt/entrypoint.sh
+RUN sed -i 's/\r$//' /opt/entrypoint.sh && chmod +x /opt/entrypoint.sh
+
+ENV HOME=/home/agent
+ENV LANG=en_US.UTF-8
+ENV DISPLAY=:0
+
+EXPOSE 22 6080
+VOLUME /workspace
+WORKDIR /workspace
+
+ENTRYPOINT ["/opt/entrypoint.sh"]
