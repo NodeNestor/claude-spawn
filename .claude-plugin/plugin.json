@@ -1,6 +1,6 @@
 {
   "name": "claude-spawn",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Spawn containerized Claude Code agents with plugins, optional desktop/GPU, and SSH/tmux access. The orchestrator plugin.",
   "author": { "name": "NodeNestor" },
   "homepage": "https://github.com/NodeNestor/claude-spawn"
